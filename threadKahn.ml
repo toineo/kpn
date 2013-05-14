@@ -28,9 +28,9 @@ module Kahn : Kahn.S = struct
 
   let doco l () =
     let ths = List.map (fun f -> Thread.create f ()) l in
-    List.iter (fun th -> Thread.join th) ths
+    List.iter Thread.join ths
 
-  let return v = (fun () -> v)
+  let return v = fun () -> v
 
   let bind e e' () =
     let v = e () in

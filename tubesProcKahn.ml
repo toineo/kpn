@@ -12,7 +12,7 @@ module Kahn : Kahn.S = struct
   type 'a out_port = 'a out_chan
 
   let new_channel = 
-    (in_channel_of_descr $ out_channel_of_descr) @ pipe 
+    in_channel_of_descr *** out_channel_of_descr =< pipe 
 
 
   let put (v : 'a) 

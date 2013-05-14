@@ -32,7 +32,7 @@ module Kahn : Kahn.S = struct
 	  | 0 -> f (); exit 0
 	  | pid -> pid
       ) l in
-    List.iter (fun p -> ignore (waitpid [] p)) procs
+    List.iter (ignore =< waitpid []) procs
 
   let return v = fun () -> v
 

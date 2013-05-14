@@ -1,4 +1,6 @@
 module Kahn : Kahn.S = struct
+  open Operators
+
   type 'a process = (unit -> 'a)
 
   type 'a channel = { q: 'a Queue.t ; m: Mutex.t; }
@@ -27,7 +29,10 @@ module Kahn : Kahn.S = struct
       get c ()
 
   let doco l () =
-    let ths = List.map (fun f -> Thread.create f ()) l in
+    let ths = List.map 
+      (* (fun f -> Thread.create f ())  *)
+      (Thread.create *- ())
+      l in
     List.iter Thread.join ths
 
   let return v = fun () -> v

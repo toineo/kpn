@@ -7,3 +7,6 @@ let ( =< ) f g = fun x -> f (g x)
 
 (* For haskellers :) *)
 let ( $ ) f x = f x
+
+(* Apply partially while skipping one parameter *)
+let ( *- ) f y = fun x -> f x y

@@ -1,4 +1,4 @@
-(*** Horribly overengineered mplementation of Kahn Process Networks
+(*** Horribly overengineered implementation of Kahn Process Networks
      using a sequential implementation of concurrency adapted from
      "A poor man's concurrency monad"
 
@@ -54,11 +54,11 @@ module S = Set.Make(struct
 end)
 
 type fake_thread_status = ThreadExec of action
-                        | ThreadWait of (unit -> action)
+                          | ThreadWait of (unit -> action)
 type fake_thread = fake_thread_status * int * int (* parent pid and self pid *)
-
+  
 let run start_process =
-
+  
   (* simple hack to get the return value *)
   let retval = ref None in
   let start_action = C.run_cont start_process
@@ -100,13 +100,13 @@ let run start_process =
 
 
 (** Implement Kahn interface **)
-
+			 
 (* channels = simple queues
    no locks necessary : we can get atomicity guarantees from the framework *)
-
+			 
 type 'a in_port = 'a Queue.t
 type 'a out_port = 'a Queue.t
-
+  
 let new_channel () = let q = Queue.create () in (q,q)
 let put x q = atom (fun () -> Queue.push x q)
 let get q = atom (fun () -> Queue.pop q)

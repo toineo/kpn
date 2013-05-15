@@ -5,35 +5,31 @@ module Example (K : Kahn.S) = struct
 
   let integers (qo : int K.out_port) : unit K.process =
     let rec loop n =
-      (* Format.printf "Firing %d@." n; *)
+      Format.printf "Firing %d@." n;
       (* FIXME : debug *)
       (K.put n qo) >>= (fun () -> loop (n + 1))
     in
     loop 2
 
-  let output (qi : int K.in_port) : unit K.process =
+  let rec filter (qi : int K.in_port) : unit K.process =
+    Format.printf "Waitin'@."; 	(* FIXME : debug *)
+    let n = K.run (K.get qi) in
+    let next_in, out = K.new_channel () in
     let rec loop () =
-      (* Format.printf "Waiting...@."; *)
-      (* FIXME : debug *)
-      (K.get qi) >>= (fun v -> Format.printf "%d@." v; loop ())
+      (K.get qi) >>= (fun v -> (if v mod n <> 0 then K.run (K.put v out)); loop ())
     in
-    loop ()
-
+    Format.printf "%d@." n;
+    K.doco [filter next_in; loop ()]
+      
   let main : unit K.process =
     (delay K.new_channel ()) >>=
-    (fun (q_in, q_out) -> K.doco [ integers q_out ; output q_in ; ])
-
+      (fun (q_in, q_out) -> K.doco [ integers q_out ; filter q_in ; ])
+      
 end
 
-(* TODO : faire un exemple plus massif *)
-<<<<<<< HEAD
-module E = Example(Coroutine)
 
-=======
 module E = Example(ThreadKahn.Kahn)
 (* module E = Example(TubesProcKahn.Kahn) *)
 (* module E = Example(NetThreadKahn.Kahn) (\* Pas fonctionnel encore *\) *)
-(* module E = Example(Proletarian) *)
->>>>>>> 75f7e00360b65bb006bc29704e8b81024e674cc6
 
 let () = E.K.run E.main

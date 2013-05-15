@@ -1,6 +1,8 @@
 (*** A continuation monad, written in the most general way possible
-     Inspired by Haskell's Control.Monad.Trans.Cont ***)
+     Inspired by Haskell's Control.Monad.Trans.Cont
+***)
 
+open Monad
 open Operators
 
 let identity x = x
@@ -21,17 +23,31 @@ type ('a,'b) t = Cont of (('a -> 'b) -> 'b)
    f = function / Kleisli morphism of type 'a -> ('b,'c) Continuation.t
 *)
 
+(* for some stupid reason OCaml constructors cannot be used
+   like regular functions *)
 let cont c = Cont c
 
 let run_cont (Cont c) k = c k (* k = final continuation *)
     
-let return x = Cont (fun k -> k x)
+let return x = cont $ fun k -> k x
 
-let bind (Cont c) f = Cont (fun k -> c (fun x -> run_cont (f x) k))
+let bind (Cont c) f = cont $ fun k -> c (fun x -> run_cont (f x) k)
 let (>>=) = bind
 
-let callCC f = Cont (fun k -> let escape x = Cont (fun _ -> k x) in
-                              run_cont (f escape) k)
+let callCC f = cont $ fun k -> let escape x = cont $ fun _ -> k x in
+                               run_cont (f escape) k
+
+
+(* just for fun *)
+module ContT (M : Monad) = struct
+  type ('a,'b) t = ContT of (('a -> 'b M.t) -> 'b M.t)
+  let cont_t c = ContT c
+  let run_cont_t (ContT c) = c
+  let return x = cont_t $ fun k -> k x
+  let bind (ContT c) f = cont_t $ fun k -> c (fun x -> run_cont_t (f x) k)
+  let callCC f = cont_t $ fun k -> let escape x = cont_t $ fun _ -> k x in
+                                   run_cont_t (f escape) k
+end
 
 
 (** Examples of continuation usage **)

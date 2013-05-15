@@ -26,7 +26,7 @@ module Example (K : Kahn.S) = struct
 end
 
 (* TODO : faire un exemple plus massif *)
-module E = Example(Proletarian)
+module E = Example(Coroutine)
 
 
 let () = E.K.run E.main

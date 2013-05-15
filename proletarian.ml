@@ -7,7 +7,11 @@
      (which is basically something like the IO monad in an impure language)
 
      The "par" and "fork" combinators are replaced by a fork_join operation
-     which spawns processes and waits for them to end
+     which spawns processes and waits for them to end (i.e. its semantics is
+     exactly that required by the specification of "doco", which cannot be
+     implemented from the 2 above-mentioned primitives) This is implemented
+     in the scheduler, which is just a top-level loop with a queue of processes
+     to execute, by giving each process an identifier.
 ***)
 
 open Operators

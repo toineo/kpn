@@ -19,17 +19,32 @@ module Kahn : Kahn.S = struct
     (fun () -> socket PF_INET SOCK_STREAM(* SEQPACKET *) 0) ()
   let next_id = ref 0
 
+  let objects = Hashtbl.create 577
 
-  (* TODO : passer le resultat de marshal pour l'exprimer en ascii *)
-  (* Puis ajouter un \n pour pouvoir getliner *)
-    
+  type slot = 
+    | Obj of string
+    | Query of (string -> unit)
+
   let rec server_worker fd =
     let in_ch = in_channel_of_descr fd in
     while true do 
       let id = input_binary_int in_ch in
       let op = input_line in_ch in
-      Format.printf "Id : %d - Op : %s@." id op
-    (* TODO *)
+      match op with
+	| "put" ->
+	  let obj = input_line in_ch in
+	  begin
+	    try let fifo = Hashtbl.find objects id in
+		Queue.add obj fifo
+	    with
+	      | Not_found ->
+		let fifo = Queue.create () in
+		Queue.add obj fifo;
+		Hashtbl.add objects id fifo
+	  end
+	| "get" ->
+      (* TODO *)
+      (* Format.printf "Id : %d - Op : %s - Obj : %s@." id op obj *)
     done
     
   let rec server_main () =
@@ -70,7 +85,8 @@ module Kahn : Kahn.S = struct
     output_string c.ch "put\n";
     flush c.ch;
     (* Marshal.to_channel c.ch v [Marshal.Closures]; *)
-    (* flush c.ch; *)
+    output_string c.ch =< (^) *- "\n" =< String.escaped $ Marshal.to_string v [Marshal.Closures];
+    flush c.ch;
     Thread.yield ()
 
   let rec get (c : 'a in_port) () =

@@ -1,45 +1,16 @@
-(*** Horribly overengineered mplementation of Kahn Process Networks
-     using the concurrency framework from "A poor man's concurrency monad"
+(*** Horribly overengineered implementation of Kahn Process Networks
+     using a sequential implementation of concurrency adapted from
+     "A poor man's concurrency monad"
 
      Instead of defining a generic monad transformer, we just take as
      a "base monad" the type constructor 'a => (unit -> 'a)
      (which is basically something like the IO monad in an impure language)
+
+     The "par" and "fork" combinators are replaced by a fork_join operation
+     which spawns processes and waits for them to end
 ***)
 
-
-module Continuation = struct
-
-
-let const x y = x (* the K combinator *)
-
-(* Parameters of the continuation type :
-   'a : type of the value produced by this step of the computation
-   'b : final type of the entire computation
-        i.e. return type of the current continuation
-   For a fixed b
-*)
-type ('a,'b) t = Cont of (('a -> 'b) -> 'b)
-
-(* Naming conventions :
-   k = continuation
-   c = computation with access to the current continuation
-   x = value
-   f = function / Kleisli morphism of type 'a -> ('b,'c) Continuation.t
-*)
-
-let cont c = Cont c
-
-let run_cont (Cont c) k = c k (* k = final continuation *)
-    
-let return x = Cont (fun k -> k x)
-
-let bind (Cont c) f = Cont (fun k -> c (fun x -> run_cont (f x) k))
-let (>>=) = bind
-
-let callCC f = Cont (fun k -> let escape x = Cont (fun _ -> k x) in
-                              run_cont (f escape) k)
-
-end
+open Operators
 
 module C = Continuation
 
@@ -49,15 +20,10 @@ let (>>=) = bind
 
 
 type action = Atom of (unit -> action)
-            | Fork of action * action
+            | ForkJoin of action list * (unit -> action)
             | Stop
 
 type 'a process = ('a, action) Continuation.t
-
-(* GADTs for the win ! *)
-(* type _ action = Atom : (unit -> 'a action) -> 'a action
-              | Fork : unit action * unit action -> unit action
-              | Result : 'a -> 'a action *)
 
 (* Turn continuation into action *)
 
@@ -70,41 +36,75 @@ let atom f = C.cont (fun k -> let x = f () in
 
 let stop = C.cont (fun _ -> Stop)
 
-(* the "par" combinator is stupid and therefore not implemented here
-   (threading the continuation to both halves results in the rest
-   of the process being executed twice)
-*)
+let fork_join cs = C.cont (fun k -> ForkJoin (List.map action cs, k))
 
-let fork c = C.cont (fun k -> Fork (action c, k ()) )
 
 (* Scheduling *)
 
-let exec_parallel actions =
+(* assign each fake thread a PID and track them so that parent threads
+   wait for their children *)
+
+module S = Set.Make(struct
+  type t = int
+  let compare = Pervasives.compare
+end)
+
+type fake_thread_status = ThreadExec of action
+                          | ThreadWait of (unit -> action)
+type fake_thread = fake_thread_status * int * int (* parent pid and self pid *)
+  
+let run start_process =
+  
+  (* simple hack to get the return value *)
+  let retval = ref None in
+  let start_action = C.run_cont start_process
+                                (fun x -> retval := Some x; Stop)
+  in
+
   let queue = Queue.create () in
-  let get_todo () = Queue.pop queue 
-  and do_later act = Queue.push act queue in
-  List.iter do_later actions;
+  let push x = Queue.push x queue in
+  push (ThreadExec start_action, -1, 0);
+  let observed_parent_pids = ref S.empty in
+  let next_pid = ref 1 in
+
   while not (Queue.is_empty queue) do
-    match get_todo () with
-    | Atom f -> do_later (f ())
-    | Fork (a, a') -> do_later a; do_later a';
-    | Stop -> ()
-  done
+    let (thread_status, parent_pid, self_pid) = Queue.pop queue in
+    if thread_status <> ThreadExec Stop
+    then observed_parent_pids := S.add parent_pid !observed_parent_pids;
+    match thread_status with
+    | ThreadExec act -> (match act with
+      | Atom f -> push (ThreadExec (f ()), parent_pid, self_pid)
+      | ForkJoin (actions, k) ->
+        List.iter (fun act' ->
+                     push (ThreadExec act', self_pid, !next_pid);
+                     incr next_pid)
+                  actions;
+        push (ThreadWait k, parent_pid, self_pid)
+      | Stop -> ()
+    )
+    | ThreadWait k ->
+        if S.mem self_pid !observed_parent_pids
+          (* reinitialize for another round *)
+        then observed_parent_pids := S.remove self_pid !observed_parent_pids
+          (* all children finished : resume continuation! *)
+        else (observed_parent_pids := S.remove self_pid !observed_parent_pids;
+              push (ThreadExec (k ()), parent_pid, self_pid) )
+  done;
+
+  let (Some v) = !retval in v
+
+
 
 (** Implement Kahn interface **)
-
+			 
 (* channels = simple queues
    no locks necessary : we can get atomicity guarantees from the framework *)
-
+			 
 type 'a in_port = 'a Queue.t
 type 'a out_port = 'a Queue.t
-
+  
 let new_channel () = let q = Queue.create () in (q,q)
 let put x q = atom (fun () -> Queue.push x q)
 let get q = atom (fun () -> Queue.pop q)
 
-(* parallel execution : use forks *)
-
-let doco = undefined
-
-let run c = exec_parallel [action c]
+let doco = fork_join

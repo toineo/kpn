@@ -26,8 +26,7 @@ module Example (K : Kahn.S) = struct
 end
 
 (* TODO : faire un exemple plus massif *)
-module E = Example(ThreadKahn.Kahn)
-(* module E = Example(TubesProcKahn.Kahn) *)
-(* module E = Example(NetThreadKahn.Kahn) *) (* Pas fonctionnel encore *)
+module E = Example(Proletarian)
+
 
 let () = E.K.run E.main

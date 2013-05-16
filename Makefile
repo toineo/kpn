@@ -3,7 +3,7 @@ OCAMLBUILD=ocamlbuild -classic-display \
 		-libs unix
 TARGET=native
 
-default: example #_crible
+default: example_crible
 
 example:
 	$(OCAMLBUILD) example.$(TARGET)

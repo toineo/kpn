@@ -3,13 +3,13 @@ OCAMLBUILD=ocamlbuild -classic-display \
 		-libs unix
 TARGET=native
 
-default: example_crible
+default: example_sieve
 
 example:
 	$(OCAMLBUILD) example.$(TARGET)
 
-example_crible:
-	$(OCAMLBUILD) example_crible.$(TARGET)
+example_sieve:
+	$(OCAMLBUILD) example_sieve.$(TARGET)
 
 clean:
 	$(OCAMLBUILD) -clean

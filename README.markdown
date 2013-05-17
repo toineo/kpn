@@ -1,5 +1,5 @@
 Implementations of Kahn process networks
-========================================
+----------------------------------------
 
 Using the OCaml programming language. (Requires version >= 3.12 ?)
 
@@ -15,10 +15,10 @@ The following implementations will eventually be available :
   * local thread communicating over sockets on localhost
   * over the network !
 
-TODO: debug sequential, maybe do sockets over network
-      both sequential impl have problems with sieve right now
+They're all done except the very last one.
 
 Note: the sequential implementations might block indefinitely on a process
 executing a non-terminating and seemingly atomic (from the POV of the
-concurrency handling code) action. Other solutions, which use the OS's
-preemptive multitasking facilities, do not have this flaw.
+concurrency handling code) action; you have to write code that cooperates
+well! Other solutions, which use the OS's preemptive multitasking facilities,
+do not have this flaw, but might be slower.

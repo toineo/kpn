@@ -132,7 +132,7 @@ module Kahn : Kahn.S = struct
   let bind m f = let (>>=) = R.bind in
                  m >>= fun x -> R.yield () >>= fun () -> f x
   let (>>=) = bind
-
+  let yield_then_do f = return () >>= f
 
   type 'a in_port = 'a Queue.t
   type 'a out_port = 'a Queue.t
@@ -146,12 +146,17 @@ module Kahn : Kahn.S = struct
   let run proc = let retval = ref None in
                  R.run (R.bind proc (fun x -> retval := Some x; return ()));
                  let (Some v) = !retval in v
-  
+
+  (* Trick to ensure fair time sharing: in doco, the process does one
+     entire round without yielding to the parent using R.bind instead
+     of bind. That way processes closer to the top of the process tree
+     do not get more time.
+  *)
   let doco proc_list =
     let rec loop enq deq = match (enq, deq) with
       | [], [] -> return ()
-      | _ , [] -> loop [] (List.rev enq)
-      | _ , k::ks -> R.resume k >>= (function
+      | _ , [] -> yield_then_do $ fun () -> loop [] (List.rev enq)
+      | _ , k::ks -> R.bind (R.resume k) (function
         | R.Yield ((), next) -> loop (next::enq) ks
         | R.Return ()        -> loop enq deq)
     in

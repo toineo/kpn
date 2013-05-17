@@ -4,12 +4,8 @@ module Kahn : Kahn.S = struct
 
   type 'a process = (unit -> 'a)
 
-  (* TODO : cleaner tout ça *)
-  (*  Le 'a ne sert qu'au typage, il n'est pas utilisé dans la structure *)
-  type 'a in_chan = in_channel
-  type 'a out_chan = out_channel
-  type 'a in_port = 'a in_chan
-  type 'a out_port = 'a out_chan
+  type 'a in_port = in_channel
+  type 'a out_port = out_channel
 
   let new_channel = 
     in_channel_of_descr *** out_channel_of_descr =< pipe 

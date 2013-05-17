@@ -70,7 +70,7 @@ module Coroutine = struct
   (* call_and_freeze defined such that resume (call_and_freeze r) = call r *)
   let call_and_freeze r () = call_ r
   let resume k = return (k ())
-  let yield x = Format.printf "yield@."; cr_ (C.cont $ fun k -> Yield (x, k))
+  let yield x = cr_ (C.cont $ fun k -> Yield (x, k))
 
   (* throw away all values but the last *)
   let run r =
@@ -140,7 +140,7 @@ module Kahn : Kahn.S = struct
   let new_channel () = let q = Queue.create () in (q,q)
   let put x q = return (Queue.push x q)
   let rec get q = try return (Queue.pop q)
-                  with Queue.Empty -> Format.printf "Queue empty@."; R.yield () >>= fun () -> get q
+                  with Queue.Empty -> R.yield () >>= fun () -> get q
 
 
   let run proc = let retval = ref None in
@@ -152,10 +152,9 @@ module Kahn : Kahn.S = struct
       | [], [] -> return ()
       | _ , [] -> loop [] (List.rev enq)
       | _ , k::ks -> R.resume k >>= (function
-        | R.Yield ((), next) -> loop (next::enq) deq
+        | R.Yield ((), next) -> loop (next::enq) ks
         | R.Return ()        -> loop enq deq)
     in
     loop (List.rev_map R.call_and_freeze proc_list) []
 
 end
-

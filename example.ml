@@ -5,16 +5,12 @@ module Example (K : Kahn.S) = struct
 
   let integers (qo : int K.out_port) : unit K.process =
     let rec loop n =
-      (* Format.printf "Firing %d@." n; *)
-      (* FIXME : debug *)
       (K.put n qo) >>= (fun () -> loop (n + 1))
     in
-    loop 2
+    loop 1
 
   let output (qi : int K.in_port) : unit K.process =
     let rec loop () =
-      (* Format.printf "Waiting...@."; *)
-      (* FIXME : debug *)
       (K.get qi) >>= (fun v -> Format.printf "%d@." v; loop ())
     in
     loop ()
@@ -27,7 +23,7 @@ end
 
 (* TODO : faire un exemple plus massif *)
 
-module E = Example(ThreadKahn.Kahn)
+module E = Example(Coroutine.Kahn)
 (* module E = Example(TubesProcKahn.Kahn) *)
 (* module E = Example(NetThreadKahn.Kahn) (\* Pas fonctionnel encore *\) *)
 (* module E = Example(Proletarian) *)

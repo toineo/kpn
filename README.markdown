@@ -15,7 +15,8 @@ The following implementations will eventually be available :
   * local thread communicating over sockets on localhost
   * over the network !
 
-TODO: finish network and sequential impl.
+TODO: debug sequential, maybe do sockets over network
+      both sequential impl have problems with sieve right now
 
 Note: the sequential implementations might block indefinitely on a process
 executing a non-terminating and seemingly atomic (from the POV of the

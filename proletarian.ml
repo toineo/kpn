@@ -109,6 +109,10 @@ type 'a out_port = 'a Queue.t
   
 let new_channel () = let q = Queue.create () in (q,q)
 let put x q = atom (fun () -> Queue.push x q)
-let get q = atom (fun () -> Queue.pop q)
+let rec get q = atom (fun () -> try Some (Queue.pop q)
+                                  with Queue.Empty -> None)
+            >>= function | Some x -> return x
+                         | None -> get q
+
 
 let doco = fork_join

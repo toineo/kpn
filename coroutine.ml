@@ -1,125 +1,161 @@
-(*** Cooperative multitasking with coroutines !
-     
-     They are implemented using call/cc in the continuation monad
-     from continuation.ml, with the environment carrying an additional
-     information : the point in the coroutine's caller where it should resume
-     upon being restored control by a call to "yield" in the callee.
-     The coroutine monad would be ReaderT (ContT IO) in Haskell.
-
-     Note that despite the ability for coroutines to return values,
-     they will only return () in practice when used in the KPN
-     implementation.
-***)
+(*** Cooperative multitasking with coroutines ! ***)
 
 open Operators
+
+(** These coroutines can exit (with a return value) and resume multiple
+    times but they always return the control to the caller (that is,
+    they can't choose who to yield to).
+
+    They are implemented using delimited continuations provided by the
+    continuation.ml module. Coroutines are represented as computations
+    in the Cont monad; within a coroutine, a yield operation can, by 
+    calling "cont", access the rest of the computation occurring
+    *inside the coroutine*, and suspend it for future use.
+
+    See also "Yield: Mainstream Delimited Continuations", although
+    the type proposed here differs in some respects: first, a coroutine
+    doesn't receive new input when resumed; secondly, the paper's
+    implementation considers the return type of a computation to be the
+    type produced by the intermediate computations, whereas we take
+    these two as separate while requiring runnable coroutines to return
+    the same type that they yield.
+**)
 
 module C = Continuation
 
 module Coroutine = struct
+  (* ('a,'b) partial : piece of a computation whose final return type is 'b,
+     producing an intermediate value of type 'a which it passes to
+     the continuation
+     'b t : complete coroutine which returns the type 'b
+     'b return_type : the sum type passed to the caller when yielding
+     
+     with our choice of type variables, we avoid the explicit type
+     quantifiers present in the paper (which would not fit neatly into
+     OCaml's rank-1 polymorphism), but we have to introduce mutually
+     recursive type declarations
+  *)
+  type ('a,'b) partial = CR of ('a, 'b return_type) C.t
+  (* type ('a,'b) partial = ('a, 'b return_type) C.t *)
+  and 'b t = ('b, 'b) partial
+  and 'b return_type = Yield of 'b * (unit -> 'b return_type)
+                       (* returned value * continuation *)
+                     | Return of 'b
 
-  (* mutually recursive data types !
-     a coroutine remembers the continuation of its parents (the reader data)
-     which also produces a coroutine *)
-
-  type 'a ret_type = Yield  of 'a * (unit -> (unit,'a) t) (* resume point *)
-                   | Return of 'a                         (* execution finished *)
-  (* it is unfortunate that the "return" of imperative languages which
-     concludes a subroutine is quite different from the "return" in
-     a monad despite the 2 having the same name *)
-
-  and 'a reader_data = 'a ret_type -> (unit,'a) t
-
-  (* a step producing an intermediate result of type 'a
-     in a coroutine whose return value has type 'b *)
-  and ('a,'b) t = CR of ('b reader_data -> ('a, unit) Continuation.t)
-
-  let run_reader (CR f) = f
-
+  (* A previous version of the following massively used the utilities in
+     Operators.ml to practice "point-free style" i.e. avoiding the naming
+     of variables when possible, but it turns out this results in errors
+     such as
+     Error: The type of this expression,
+            '_a return_type -> ('_a return_type, '_b) partial,
+             contains type variables that cannot be generalized
+     Actually, one can often run into this kind of trouble when using
+     this module...
+  *)
   let cr_ x = CR x
-  
-  let return x = cr_ $ fun _ -> C.return x
-  let bind r f = cr_ $ fun x -> C.bind (run_reader r x)
-                                       (fun y -> run_reader (f y) x)
+  let uncr_ (CR x) = x
+
+  (* monadic interface: just re-export the functions from Cont
+     with some (un)wrapping
+  *)
+  let return x = cr_ (C.return x)
+  let bind m f = cr_ (C.bind (uncr_ m) (fun x -> uncr_ (f x)))
   let (>>=) = bind
 
-  let ask = cr_ $ fun x -> C.return x
-  let with_reader x m = cr_ $ fun _ -> run_reader m x
-  let lift cont = cr_ $ fun _ -> cont
+  (* coroutine-specific functions
+     (use "call_" from outside a coroutine computation, "call" from inside)
+  *)
+  let call_ (CR r) = C.run_cont r $ fun x -> Return x
+  let call r = return (call_ r)
+  (* call_and_freeze defined such that resume (call_and_freeze r) = call r *)
+  let call_and_freeze r () = call_ r
+  let resume k = return (k ())
+  let yield x = Format.printf "yield@."; cr_ (C.cont $ fun k -> Yield (x, k))
 
-  (* callCC lifted to handle computations in the transformed monad
-     see also liftCallCC in Control.Monad.Trans.Reader *)
-  let callCC' f = cr_ $ fun x -> C.callCC $ fun k ->
-    run_reader (f (cr_ =< C.const =< k)) x
-
-  (* call a (child) coroutine *)
-  let call r = callCC' $ fun ret_point -> 
-    with_reader ret_point $ r >>= fun x -> return $ Return x
-
-  (* return control to the parent *)
-  let yield x = ask >>= fun ret_point ->
-    callCC' $ fun k ->
-      ret_point $ Yield (x, k)
-
-  (* this execution function runs the coroutine until it finishes
-     and only returns the last value produced *)
-  let run coroutine =
-    let rec loop r = call r >>= function
-      | Yield (_, resume) -> loop (resume ())
-      | Return value -> return value
+  (* throw away all values but the last *)
+  let run r =
+    let rec loop = function
+      | Yield (_, k) -> loop (k ())
+      | Return v -> v
     in
-    let ret_val = ref None in
-    C.run_cont *- (fun x -> ret_val := Some x)
-    =< run_reader *- (fun _ -> assert false)
-    $  loop coroutine;
-    let (Some v) = !ret_val in v
-    
+    loop (call_ r)
 end
 
-open Coroutine
+(** Example of coroutine use: an integer-listing program
+    analogous to the example for KPNs **)
 
-let generate_ints =
-  let rec loop n = yield n >>= fun _ -> loop (n+1) in
-  loop 0
+module CoroutineExample = struct
 
-let print_ints = call generate_ints >>= fun (Yield (n,resume)) ->
-    print_int n; print_newline (); call (resume ())
+  open Coroutine
 
-let _ = run print_ints
+  let generate_ints =
+    let rec loop n = yield n >>= fun () -> loop (n+1) in
+    loop 0
 
-(*
-let return = Coroutine.return
-let bind = Coroutine.bind
+  let rec print_ints =
+    let rec loop (Yield (n,next)) =
+      print_int n; print_newline ();
+      resume next >>= loop
+    in
+    call generate_ints >>= fun x ->
+    loop x >>= fun _ ->
+    return () (* necessary to constrain the return type
+                 and avoid the dreaded type-variable-generalization problem *)
 
-type 'a process = (unit,'a) Coroutine.t
+  let main () = run print_ints
 
-type 'a channel = 'a Queue.t
-type 'a in_port = 'a channel
-type 'a out_port = 'a channel
+end
 
-let new_channel () = Queue.create ()
+(** Now we turn to the implementation of KPNs.
 
-let put v c () =
-  Queue.push v c.q;
-  Coroutine.yield ()
+    A process is just a coroutine with final return type unit, where yielding
+    is used solely to transfer control, not values. (This allows us to sidestep
+    the aforementioned type-variable-generalization issues.)
+    We redefine the sequencing operator bind to add yielding between 2 steps
+    of the computation, so that the control may alternate between the different
+    threads.
 
-let rec get c () =
-  try
-    Queue.pop c.q
-  with Queue.Empty ->
-    Coroutine.yield ();
-    get c ()
+    A lot of the work has already been done above, the only things remaining are:
+    * channels: easy, since everything runs sequentially, we can arrange for
+      reading/writing on queues to be atomic and we don't need locks!
+    * parallel execution: when a process spawns concurrent children, it takes
+      responsibility for their management by making them run in a round-robin
+      scheduling is not global, but done at each level of forking
+**)    
 
-let doco l () =
-  let ths = List.map (fun f -> Thread.create f ()) l in
-  List.iter (fun th -> Thread.join th) ths
+module Kahn : Kahn.S = struct
+  module R = Coroutine
 
-let return v = (fun () -> v)
+  type 'a process = ('a, unit) R.partial
 
-let bind e e' () =
-  let v = e () in
-  Thread.yield ();
-  e' v ()
+  let return = R.return
+  let bind m f = let (>>=) = R.bind in
+                 m >>= fun x -> R.yield () >>= fun () -> f x
+  let (>>=) = bind
 
-let run e = e ()
 
-*)
+  type 'a in_port = 'a Queue.t
+  type 'a out_port = 'a Queue.t
+
+  let new_channel () = let q = Queue.create () in (q,q)
+  let put x q = return (Queue.push x q)
+  let rec get q = try return (Queue.pop q)
+                  with Queue.Empty -> Format.printf "Queue empty@."; R.yield () >>= fun () -> get q
+
+
+  let run proc = let retval = ref None in
+                 R.run (R.bind proc (fun x -> retval := Some x; return ()));
+                 let (Some v) = !retval in v
+  
+  let doco proc_list =
+    let rec loop enq deq = match (enq, deq) with
+      | [], [] -> return ()
+      | _ , [] -> loop [] (List.rev enq)
+      | _ , k::ks -> R.resume k >>= (function
+        | R.Yield ((), next) -> loop (next::enq) deq
+        | R.Return ()        -> loop enq deq)
+    in
+    loop (List.rev_map R.call_and_freeze proc_list) []
+
+end
+

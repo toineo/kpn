@@ -3,7 +3,7 @@ OCAMLBUILD=ocamlbuild -classic-display \
 		-libs unix
 TARGET=native
 
-default: example_sieve
+default: example #_sieve
 
 example:
 	$(OCAMLBUILD) example.$(TARGET)

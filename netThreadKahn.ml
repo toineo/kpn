@@ -105,7 +105,7 @@ module Kahn : Kahn.S = struct
 
 
   (* References *)
-  let server_tid = Server.run
+  let server_tid = fire Server.run ()
     (* fire server_main () *)
 
   let () = yield () (* Launch the server *)

@@ -27,7 +27,8 @@ end
 
 (* module E = Example(ThreadKahn.Kahn) *)
 (* module E = Example(TubesProcKahn.Kahn) *)
-module E = Example(NetThreadKahn.Kahn)
-(* module E = Example(Proletarian) *)
+(* module E = Example(NetThreadKahn.Kahn) *)
+(* module E = Example(Proletarian) *) (* TODO : .kahn *)
+module E = Example(Coroutine.Kahn)
 
 let () = E.K.run E.main

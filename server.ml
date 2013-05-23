@@ -14,9 +14,25 @@ module SimpleServer : Server =
   functor (Cfg : ServerConfig) ->
     struct
       open Thread
+
+      let serv_addr = ADDR_INET (local_ip, server_port)
 	
       (* Utilities *)
       let fire = create
+
+      (** Request/objects queue **)
+      module ROHstb = RequestObjectQueue.ObjReqHashtbl (struct type t = int end) (String)
+      open ROHstb.Queue
+
+      let obj_mutex = Mutex.create ()
+
+      (* Request/objects queue utility functions *)
+      (* /!\ This function lock the hashtable mutex /!\ *)
+      let get_queue id =
+        Mutex.lock obj_mutex;
+        ROHstb.get_queue id
+
+
 	
       let rec server_worker fd =
 	let in_ch = in_channel_of_descr fd in
@@ -76,4 +92,14 @@ module SimpleServer : Server =
 	    | _ -> assert false
     done
 
+    let server_main () =
+      handle_unix_error (fun () -> 
+        bind server_socket serv_addr;
+        listen server_socket server_port;) ();
+      while true do 
+        let fd = fst =< accept $ server_socket in
+        ignore (fire server_worker fd) (* FIXME : make a real shutdown *)
+      done
+
+    let run = server_main (* FIXME : do we really want the same behavior ? *)
 end

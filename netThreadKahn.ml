@@ -7,7 +7,6 @@ module Kahn : Kahn.S = struct
   let local_ip = 
     (* inet_addr_of_string "127.0.0.1" *)
     ( Unix.gethostbyname "localhost" ).Unix.h_addr_list.(0)
-  let serv_addr = ADDR_INET (local_ip, server_port)
 
   type 'a process = (unit -> 'a)
 
@@ -15,10 +14,8 @@ module Kahn : Kahn.S = struct
   type 'a in_port = ('a, in_channel * out_channel) channel
   type 'a out_port = ('a, out_channel) channel
 
-  let fire = create
+  let fire = create (* FIXME : is it used here ? *)
 
-  let server_socket = handle_unix_error 
-    (fun () -> socket PF_INET SOCK_STREAM(* SEQPACKET *) 0) ()
   let next_id = ref 0
 
   (** Request/objects queue **)
@@ -38,10 +35,10 @@ module Kahn : Kahn.S = struct
     while true do 
       let id = input_binary_int in_ch in
       let op = input_line in_ch in
+      let fifo = get_queue id in
       match op with
 	| "put" ->
 	  let obj = input_line in_ch in
-	  let fifo = get_queue id in
 	  begin
 	    match get_state fifo with
 	      | Empty | Normal ->
@@ -59,7 +56,6 @@ module Kahn : Kahn.S = struct
 	  end
 	    
 	| "get" ->
-	  let fifo = ROHstb.get_queue id in
 	  let obj = ref "" in
 	  
 	  (* Get the requested object and lock ourselves if not yet present *)
@@ -85,7 +81,7 @@ module Kahn : Kahn.S = struct
 	  
 	  (* Then send the result *)
 	  let out_ch = out_channel_of_descr fd in
-	  output_string out_ch (!obj ^ "\n");
+	  output_string out_ch $ !obj ^ "\n";
 	  flush out_ch
 
 	| _ -> assert false
@@ -146,8 +142,8 @@ module Kahn : Kahn.S = struct
 
 
   let doco l () =
-    let ths = List.map (fun f -> Thread.create f ()) l in
-    List.iter (fun th -> Thread.join th) ths
+    let ths = List.map (Thread.create *- ()) l in
+    List.iter Thread.join ths
 
 
   let return v = (fun () -> v)

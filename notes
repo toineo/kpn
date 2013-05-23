@@ -1,0 +1,6 @@
+- For the (current) network implementations, no check is made
+  to ensure that only *one* agent can write in a channel.
+  Consequently, we might have multiples agents sending data
+  in a single channel, which might not correspond to the
+  desired interface (but this point is unclear, in the 
+  specification).

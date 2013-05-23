@@ -22,41 +22,17 @@ module Kahn : Kahn.S = struct
   let next_id = ref 0
 
   (** Request/objects queue **)
-  type slot = 
-    | Obj of string
-    | Query of (string -> unit)
+  module ROHstb = RequestObjectQueue.ObjReqHashtbl (struct type t = int end) (String)
+  open ROHstb.Queue
 
-  type queue_state =
-    (* FIXME : choose better names *)
-    | Empty
-    | Normal 
-    | Request
-
-  let objects : (int, slot Queue.t) Hashtbl.t = Hashtbl.create 577
   let obj_mutex = Mutex.create ()
-
 
   (* Request/objects queue utility functions *)
   (* /!\ This function lock the hashtable mutex /!\ *)
-  let get_fifo id =
+  let get_queue id =
     Mutex.lock obj_mutex;
-    try Hashtbl.find objects id 
-    with
-    | Not_found ->
-      let fifo = Queue.create () in
-      Hashtbl.add objects id fifo;
-      fifo
+    ROHstb.get_queue id
       
-  let get_fifo_state q =
-    if Queue.is_empty q then
-      Empty
-
-    else
-      match Queue.peek q with
-        | Obj _ -> Normal
-	| Query _ -> Request
-      
-
   let rec server_worker fd =
     let in_ch = in_channel_of_descr fd in
     while true do 
@@ -65,16 +41,16 @@ module Kahn : Kahn.S = struct
       match op with
 	| "put" ->
 	  let obj = input_line in_ch in
-	  let fifo = get_fifo id in
+	  let fifo = get_queue id in
 	  begin
-	    match get_fifo_state fifo with
+	    match get_state fifo with
 	      | Empty | Normal ->
-		Queue.add (Obj obj) fifo;
+		add (Obj obj) fifo;
 		Mutex.unlock obj_mutex
 
 	      | Request ->
 		begin
-		  match Queue.pop fifo with
+		  match pop fifo with
 	            | Query f -> f obj
 		    | _ -> assert false
 		end;
@@ -83,14 +59,14 @@ module Kahn : Kahn.S = struct
 	  end
 	    
 	| "get" ->
-	  let fifo = get_fifo id in
+	  let fifo = ROHstb.get_queue id in
 	  let obj = ref "" in
 	  
 	  (* Get the requested object and lock ourselves if not yet present *)
 	  begin
-	    match get_fifo_state fifo with
+	    match get_state fifo with
               | Normal -> 
-		obj := (match Queue.pop fifo with
+		obj := (match pop fifo with
 		  | Obj s -> s
 		  | _ -> assert false)
 		;
@@ -100,7 +76,7 @@ module Kahn : Kahn.S = struct
 		let mut = Mutex.create () in
 		let query = fun s -> obj := s; Mutex.unlock mut in
 		Mutex.lock mut;
-		Queue.add (Query query) fifo;
+		add (Query query) fifo;
 
 		(* FIXME : we should not be interrupted between next 2 instructions *)
 		Mutex.unlock obj_mutex;

@@ -1,7 +1,7 @@
 Implementations of Kahn process networks
 ----------------------------------------
 
-Using the OCaml programming language. (Requires version >= 3.12 ?)
+Using the OCaml programming language. (Requires version >= 4.00)
 
 lib.ml contains the common interface for all implementations.
 

@@ -1,3 +1,8 @@
+open Operators
+open Unix
+
+let get_addr () = (gethostbyname (gethostname ())).h_addr_list.(0)
+
 module type ServerConfig = sig
   val ip : int
   val port : int

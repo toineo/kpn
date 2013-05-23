@@ -6,7 +6,8 @@ module Kahn : Kahn.S = struct
   let server_port = 10000
   let local_ip = 
     (* inet_addr_of_string "127.0.0.1" *)
-    ( Unix.gethostbyname "localhost" ).Unix.h_addr_list.(0)
+    (* ( Unix.gethostbyname "localhost" ).Unix.h_addr_list.(0) *)
+    Server.get_addr ()
 
   type 'a process = (unit -> 'a)
 
@@ -22,84 +23,90 @@ module Kahn : Kahn.S = struct
   module ROHstb = RequestObjectQueue.ObjReqHashtbl (struct type t = int end) (String)
   open ROHstb.Queue
 
-  let obj_mutex = Mutex.create ()
+  (* let obj_mutex = Mutex.create () *)
 
   (* Request/objects queue utility functions *)
   (* /!\ This function lock the hashtable mutex /!\ *)
-  let get_queue id =
-    Mutex.lock obj_mutex;
-    ROHstb.get_queue id
+  (* let get_queue id = *)
+  (*   Mutex.lock obj_mutex; *)
+  (*   ROHstb.get_queue id *)
       
-  let rec server_worker fd =
-    let in_ch = in_channel_of_descr fd in
-    while true do 
-      let id = input_binary_int in_ch in
-      let op = input_line in_ch in
-      let fifo = get_queue id in
-      match op with
-	| "put" ->
-	  let obj = input_line in_ch in
-	  begin
-	    match get_state fifo with
-	      | Empty | Normal ->
-		add (Obj obj) fifo;
-		Mutex.unlock obj_mutex
+  (* let rec server_worker fd = *)
+  (*   let in_ch = in_channel_of_descr fd in *)
+  (*   while true do  *)
+  (*     let id = input_binary_int in_ch in *)
+  (*     let op = input_line in_ch in *)
+  (*     let fifo = get_queue id in *)
+  (*     match op with *)
+  (*       | "put" -> *)
+  (*         let obj = input_line in_ch in *)
+  (*         begin *)
+  (*           match get_state fifo with *)
+  (*             | Empty | Normal -> *)
+  (*       	add (Obj obj) fifo; *)
+  (*       	Mutex.unlock obj_mutex *)
 
-	      | Request ->
-		begin
-		  match pop fifo with
-	            | Query f -> f obj
-		    | _ -> assert false
-		end;
+  (*             | Request -> *)
+  (*       	begin *)
+  (*       	  match pop fifo with *)
+  (*                   | Query f -> f obj *)
+  (*       	    | _ -> assert false *)
+  (*       	end; *)
 
-		Mutex.unlock obj_mutex
-	  end
+  (*       	Mutex.unlock obj_mutex *)
+  (*         end *)
 	    
-	| "get" ->
-	  let obj = ref "" in
+  (*       | "get" -> *)
+  (*         let obj = ref "" in *)
 	  
-	  (* Get the requested object and lock ourselves if not yet present *)
-	  begin
-	    match get_state fifo with
-              | Normal -> 
-		obj := (match pop fifo with
-		  | Obj s -> s
-		  | _ -> assert false)
-		;
-		Mutex.unlock obj_mutex
+  (*         (\* Get the requested object and lock ourselves if not yet present *\) *)
+  (*         begin *)
+  (*           match get_state fifo with *)
+  (*             | Normal ->  *)
+  (*       	obj := (match pop fifo with *)
+  (*       	  | Obj s -> s *)
+  (*       	  | _ -> assert false) *)
+  (*       	; *)
+  (*       	Mutex.unlock obj_mutex *)
 
-	      | Empty | Request ->
-		let mut = Mutex.create () in
-		let query = fun s -> obj := s; Mutex.unlock mut in
-		Mutex.lock mut;
-		add (Query query) fifo;
+  (*             | Empty | Request -> *)
+  (*       	let mut = Mutex.create () in *)
+  (*       	let query = fun s -> obj := s; Mutex.unlock mut in *)
+  (*       	Mutex.lock mut; *)
+  (*       	add (Query query) fifo; *)
 
-		(* FIXME : we should not be interrupted between next 2 instructions *)
-		Mutex.unlock obj_mutex;
-		Mutex.lock mut (* Let's purposefully lock ourselves ! *)
-	  end;
+  (*       	(\* FIXME : we should not be interrupted between next 2 instructions *\) *)
+  (*       	Mutex.unlock obj_mutex; *)
+  (*       	Mutex.lock mut (\* Let's purposefully lock ourselves ! *\) *)
+  (*         end; *)
 	  
-	  (* Then send the result *)
-	  let out_ch = out_channel_of_descr fd in
-	  output_string out_ch $ !obj ^ "\n";
-	  flush out_ch
+  (*         (\* Then send the result *\) *)
+  (*         let out_ch = out_channel_of_descr fd in *)
+  (*         output_string out_ch $ !obj ^ "\n"; *)
+  (*         flush out_ch *)
 
-	| _ -> assert false
-    done
+  (*       | _ -> assert false *)
+  (*   done *)
 
     
-  let server_main () =
-    handle_unix_error (fun () -> 
-      bind server_socket serv_addr;
-      listen server_socket server_port;) ();
-    while true do 
-      let fd = fst =< accept $ server_socket in
-      ignore (fire server_worker fd) (* FIXME : make a real shutdown *)
-    done
+  (* let server_main () = *)
+  (*   handle_unix_error (fun () ->  *)
+  (*     bind server_socket serv_addr; *)
+  (*     listen server_socket server_port;) (); *)
+  (*   while true do  *)
+  (*     let fd = fst =< accept $ server_socket in *)
+  (*     ignore (fire server_worker fd) (\* FIXME : make a real shutdown *\) *)
+  (*   done *)
+
+  module Server = Server.SimpleServer (struct 
+    let ip = local_ip
+    let port = server_port 
+  end)
 
 
   (* References *)
-  let server_tid = fire server_main ()
+  let server_tid = Server.run
+    (* fire server_main () *)
 
   let () = yield () (* Launch the server *)
   let () = delay 0.1 (* FIXME : ? *)
@@ -109,7 +116,7 @@ module Kahn : Kahn.S = struct
     let id = !next_id in
     let make = fun conv -> 
       let sock = socket PF_INET SOCK_STREAM 0 in
-      handle_unix_error (fun () -> connect sock serv_addr) ();
+      handle_unix_error (fun () -> connect sock $ Server.get_addr ()) ();
       { id = id; ch = conv sock } 
     in
     incr next_id;

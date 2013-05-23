@@ -4,13 +4,14 @@ open Unix
 let get_addr () = (gethostbyname (gethostname ())).h_addr_list.(0)
 
 module type ServerConfig = sig
-  val ip : int
+  val ip : inet_addr
   val port : int
 end
 
 module type Server = 
   functor (Cfg : ServerConfig) ->
     sig
+      val get_addr : unit -> sockaddr
       val run : unit -> unit
     end
 
@@ -20,7 +21,10 @@ module SimpleServer : Server =
     struct
       open Thread
 
-      let serv_addr = ADDR_INET (local_ip, server_port)
+      let serv_addr = ADDR_INET (Cfg.ip, Cfg.port)
+
+      let server_socket = handle_unix_error
+        (fun () -> socket PF_INET SOCK_STREAM(* SEQPACKET *) 0) ()
 	
       (* Utilities *)
       let fire = create
@@ -47,16 +51,16 @@ module SimpleServer : Server =
 	  match op with
   	    | "put" ->
 	      let obj = input_line in_ch in
-	      let fifo = get_fifo id in
+	      let fifo = get_queue id in
 	      begin
-		match get_fifo_state fifo with
+		match get_state fifo with
 		  | Empty | Normal ->
-		    Queue.add (Obj obj) fifo;
+		    add (Obj obj) fifo;
 		    Mutex.unlock obj_mutex
 		      
 		  | Request ->
 		    begin
-		      match Queue.pop fifo with
+		      match pop fifo with
 	                | Query f -> f obj
 			| _ -> assert false
 		    end;
@@ -65,14 +69,14 @@ module SimpleServer : Server =
 	      end
 		
 	    | "get" ->
-	      let fifo = get_fifo id in
+	      let fifo = get_queue id in
 	      let obj = ref "" in
 	      
 	      (* Get the requested object and lock ourselves if not yet present *)
 	      begin
-		match get_fifo_state fifo with
+		match get_state fifo with
  		  | Normal -> 
-		    obj := (match Queue.pop fifo with
+		    obj := (match pop fifo with
  		      | Obj s -> s
 		      | _ -> assert false)
 		    ;
@@ -82,7 +86,7 @@ module SimpleServer : Server =
 		    let mut = Mutex.create () in
 		    let query = fun s -> obj := s; Mutex.unlock mut in
 		    Mutex.lock mut;
-		    Queue.add (Query query) fifo;
+		    add (Query query) fifo;
 		    
 		    (* FIXME : we should not be interrupted between next 2 instructions *)
 		    Mutex.unlock obj_mutex;
@@ -95,16 +99,22 @@ module SimpleServer : Server =
 	      flush out_ch
 		
 	    | _ -> assert false
-    done
+        done
 
-    let server_main () =
-      handle_unix_error (fun () -> 
-        bind server_socket serv_addr;
-        listen server_socket server_port;) ();
-      while true do 
-        let fd = fst =< accept $ server_socket in
-        ignore (fire server_worker fd) (* FIXME : make a real shutdown *)
-      done
+      let server_main () =
+        handle_unix_error (fun () -> 
+          bind server_socket serv_addr;
+          listen server_socket Cfg.port;) ();
+        while true do 
+          let fd = fst =< accept $ server_socket in
+          ignore (fire server_worker fd) (* FIXME : make a real shutdown *)
+        done
+          
 
-    let run = server_main (* FIXME : do we really want the same behavior ? *)
-end
+
+      (** Interface **)
+      let run = server_main (* FIXME : do we really want the same behavior
+      ? *)
+
+      let get_addr () = serv_addr
+    end

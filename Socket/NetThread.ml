@@ -1,4 +1,4 @@
-module Kahn : Kahn.S = struct
+module Kahn : KPN.S = struct
   open Operators
   open Thread
   open Unix

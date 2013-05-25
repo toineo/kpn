@@ -1,0 +1,2 @@
+<Seq/*.cmx>: for-pack(Seq)
+<Socket/*.cmx>: for-pack(Socket)

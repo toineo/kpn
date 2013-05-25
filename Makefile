@@ -1,4 +1,4 @@
-OCAMLBUILD=ocamlbuild -classic-display \
+OCAMLBUILD=ocamlbuild -r -classic-display \
 		-tags annot,debug,thread \
 		-libs unix
 TARGET=native

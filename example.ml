@@ -1,4 +1,4 @@
-module Example (K : Kahn.S) = struct
+module Example (K : KPN.S) = struct
   module K = K
   module Lib = Lib.Lib(K)
   open Lib
@@ -21,9 +21,7 @@ module Example (K : Kahn.S) = struct
 
 end
 
-(* TODO : faire un exemple plus massif *)
-
-module E = Example(Seq.Coroutine.Kahn)
+module E = Example(Kahn.Seq)
 
 
 let () = E.K.run E.main

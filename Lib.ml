@@ -1,4 +1,4 @@
-module Lib (K : Kahn.S) = struct
+module Lib (K : KPN.S) = struct
   let ( >>= ) x f = K.bind x f
 
   let delay f x =

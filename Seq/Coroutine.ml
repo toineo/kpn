@@ -123,7 +123,7 @@ end
       scheduling is not global, but done at each level of forking
 **)    
 
-module Kahn : Kahn.S = struct
+module Kahn : KPN.S = struct
   module R = Coroutine
 
   type 'a process = ('a, unit) R.partial

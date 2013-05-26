@@ -1,0 +1,126 @@
+\documentclass[a4paper, 11pt]{article}
+
+% Locale/encoding : use XeTeX ! no fontenc/inputenc needed
+\usepackage{fontspec}
+\usepackage{lmodern}
+\usepackage[frenchb]{babel}
+
+\usepackage{fullpage}
+
+% TeX Gyre Pagella = free Palatino clone
+\setmainfont[Numbers=OldStyle]{TeX Gyre Pagella}
+
+
+\title{Rapport de projet Systèmes et Réseaux : réseaux de Kahn}
+\author{Nguyen Le Thanh Dung \and Antoine Voizard}
+
+\begin{document}
+
+\maketitle
+
+\section*{Généralités}
+
+Le projet a été codé en OCaml 4.00. (Le module Socket ne compile pas
+sur les machines de l'école qui sont en version 3.12 !) Les cibles du
+Makefile (qui utilise \texttt{ocamlbuild}) sont : 
+\begin{itemize}
+\item \texttt{example} (par défaut) : exemple simple affichant les
+  entiers
+\item \texttt{example\_sieve} : crible d'\'Eratosthène
+\item \texttt{clean} : effacer les traces d'une ancienne compilation
+\end{itemize}
+
+Toutes les implémentations demandées ont été réalisées (il y a même 2
+solutions séquentielles), même si celle pour le réseau est légèrement
+insatisfaisante (cf. section dédiée). Nous avons donc généralement
+atteint nos objectifs même si, le temps permettant, nous aurions aimé
+avoir d'autres implémentations, faisant par exemple de la répartition
+de charge.
+
+Remarquons que l'interface proposée permet d'écrire des programmes plus
+généraux que ceux rentrant dans le cadre des réseaux de Kahn, et que
+nos implémentations permettent généralement à ces programmes de
+fonctionner. Ainsi, il est possible pour un processus d'écouter
+simultanément sur plusieurs files de communications\ldots
+
+% Paragraphe superflu ?
+Nous sommes partis du template de projet basique fourni, dont nous
+avons gardé le Makefile. Le fichier \texttt{kahn.ml} s'est retrouvé
+divisé en 3 : fonctions utilitaires dans \texttt{Lib.ml},
+implémentation avec des processus légers (que nous avons conservé presque à
+l'identique) dans \texttt{Th.ml}, et interface dans \texttt{KPN.ml}.
+
+Notons enfin la présence dans notre code d'opérateurs inspirés de
+la librairie standard de Haskell, permettant parfois d'omettre des
+noms de variables explicites (cf. \texttt{Operators.ml}).
+
+
+\section*{Processus lourds et tubes (fichier \texttt{Pipe.ml})}
+
+Il n'y a presque rien à dire au sujet de cette implémentation, en
+grande partie reprise sur celle avec des threads. Les choix techniques
+sont les plus évidents possibles : un processus par agent du réseau,
+un tube pour chaque canal. La manipulation des tubes se faisant très
+simplement en OCaml grâce aux in/out\_channel et au module Marshal,
+il n'y a pas eu de difficulté ici.
+
+
+\section*{Implémentations séquentielles (dossier \texttt{Seq/})}
+
+Nous avons implémenté 2 solutions différentes pour simuler l'exécution
+parallèle. Dans les deux cas, les canaux et les fonctions \texttt{put}
+et \texttt{get} étaient triviaux (implémentés par de simples queues
+sans avoir à se soucier d'exclusion mutuelle), tandis que toute la
+difficulté résidait dans le fait de faire avancer des processus
+concurrents. Pour cela, il fallait faire en sorte que le \texttt{bind}
+force un processus à \og passer la main \fg aux autres. Il faut donc
+écrire du code qui coopère bien ; si un des processus plante ou rentre
+dans une boucle infinie, il en va de même pour tout le programme !
+
+Les deux employant des continuations délimitées, une monade de 
+continuations a été écrite dans \texttt{Continuation.ml} pour leur
+utilisation commune.
+
+L'implémentation dans \texttt{Proletarian.ml} est basée sur le papier [1]
+cité dans le sujet du projet. Le framework proposé ne répondant pas
+tout à fait à la spécification du projet, nous avons ajouté un nouveau
+type d'action pour implémenter la fonction \texttt{doco}, et altéré
+l'ordonnanceur round-robin proposé. Celui-ci utilise désormais une boucle
+impérative avec une file FIFO mutable de processus, et attribue à
+chaque processus un identifiant pour qu'un processus père puisse
+attendre que ses fils se terminent.
+
+L'autre implémentation repose sur des coroutines, mécanisme
+traditionnel pour le multitasking coopératif. Celles-ci sont
+implémentées grâce à la capacité d'une coroutine de capturer la
+continuation jusqu'à la fin de la coroutine, et de la
+renvoyer au parent qui pourra la rappeler. Une fois ceci en place, la
+fonction \texttt{doco} n'a qu'à faire un round-robin sur la liste
+des processus en arguments, qui font appel à \texttt{yield} quand ils
+ont fini une unité de travail. (voir les commentaires du code pour
+plus de détails)
+
+Différence principale : dans le 1er cas, l'ordonnancement se fait
+globalement avec une queue de tous les processus, alors que dans le
+2ème cas, chaque processus est responsable de l'ordonnancement de ses
+fils.
+
+Une difficulté majeure aura été de bien comprendre le fonctionnement
+concret des continuations et comment les exploiter au mieux. (Une
+tentative d'implémenter les coroutines était d'utiliser des call/cc
+imbriqués et des références, ça ne marchait pas bien !)
+
+
+\section*{Communication par prises sur le réseau (dossier \texttt{Socket/})}
+
+Le projet en réseau repose sur une architecture client/serveur. Un
+serveur central s'occupe de faire transiter les messages entre
+différents clients qui s'y sont connectés. Dès qu'un agent veut émettre/recevoir
+une valeur, il communique au serveur l'identifiant du canal utilisé,
+le type d'opération à effectuer et l'éventuelle valeur. Dans le cas
+d'une lecture, le serveur renvoie la première valeur disponible, dès
+qu'il y en a une (le client reste bloqué pendant ce temps).
+
+Détaillons le fonctionnement des canaux. Côté client, ...
+
+\end{document}

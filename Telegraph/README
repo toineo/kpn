@@ -1,0 +1,7 @@
+This is a simple example to demonstrate the ability of the Socket
+module to do more than just running a client and a server on 2 threads
+in the same process and communicating on localhost.
+* sender.ml reads lines from stdin and pushes them to the channel with id 1
+* server.ml is, well, the server...
+* reciever.ml gets the input from channel 1 and prints it
+Result: type in one terminal, get back what you wrote in another!

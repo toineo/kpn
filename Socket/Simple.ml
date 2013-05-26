@@ -2,6 +2,8 @@
      to have 2 processes communicating over localhost
 ***)
 
+open Operators
+
 let server_port = 10000
 let local_ip = Server.get_addr ()
 
@@ -19,10 +21,10 @@ module Kahn : KPN.S = struct include Cl
   let bind = bind
 
   let run e = 
-    Thread.create Srv.run ();    (* no need for thread id ? *)
+    ignore $ Thread.create Srv.run ();    (* no need for thread id ? *)
     let () = Thread.yield ()  in (* Launch the server *)
     let () = Thread.delay 0.1 in (* FIXME : ? *)
-    e ()
+    Cl.run e
 
   let new_channel () = 
     let id = !next_id in

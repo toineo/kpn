@@ -15,7 +15,6 @@ end
 
 
 module SimpleServer : Server = functor (Cfg : ServerConfig) -> struct
-  open Thread
 
   let serv_addr = ADDR_INET (Cfg.ip, Cfg.port)
 
@@ -23,7 +22,7 @@ module SimpleServer : Server = functor (Cfg : ServerConfig) -> struct
     (fun () -> socket PF_INET SOCK_STREAM(* SEQPACKET *) 0) ()
     
   (* Utilities *)
-  let fire = create
+  let fire = Thread.create
 
   (** Request/objects queue **)
   module ROHstb = RequestObjectQueue.ObjReqHashtbl (struct type t = int end) (String)

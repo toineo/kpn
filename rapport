@@ -1,0 +1,45 @@
+__ Général __
+- Non réalisé : rien ?
+  (on peut dire qu'on aurait aimé faire une implé réseau avec
+   des serveurs qui se partagent les process à executer)
+
+Parle-t-on du fait qu'on ne cherche pas à interdire des
+lectures/ecritures venant d'agents différents sur le même canal ?
+
+__ Processus / pipes __
+Choix techniques : ce qu'il y a de plus simple, un processus 
+par agent du réseau, un pipe pour représenter un canal.
+
+Difficultés : pas vraiment, grâce aux in/out_channel de caml
+
+
+__ Socket __
+Choix techniques : indépendant du type de processus (léger ou lourd) qui
+executent le code des agents du réseau. Un serveur central s'occupe de
+faire transiter les messages. Dès qu'un agent veut émettre/recevoir
+une valeur, il se connecte au serveur, lui communique l'id du canal
+utilisé, le type d'opération à effectuer et l'éventuelle valeur. Dans le
+cas d'une lecture, le serveur renvoie la première valeur disponible, dès
+qu'il y en a une (le client reste bloqué pendant ce temps).
+
+Le type "channel" comporte l'id du canal ainsi que les *_channel (ocaml)
+correspondant au sens du canal :
+- un "in" et un "out" pour un canal d'entrée
+- seulement un "out" pour un canal de sortie
+
+Au niveau du serveur, on utilise une table de hashage (indicée par les id 
+des canaux) contenant des files. Ces files contiennent à leur tour
+- soit des objets (c'est-à-dire que sur ce canal, le serveur a déjà reçu 
+  des données)
+- soit des requêtes (dans le cas où au contraire, on a pas de données, mais
+  des lectures ont déjà été faites), qui sont des fonctions consommant une
+  donnée (note : les données sont toutes sous forme de chaînes, issues du
+  marshaling)
+
+Le serveur utilise un thread par connexion (de client), et une requête
+se charge, lorsqu'elle est "activée", de réveiller le thread concerné ;
+celui-ci pourra alors répondre à son client (qui lui a fait une demande de
+lecture).
+
+Difficultés : utilisation correcte des sockets (une petite erreur pouvant 
+empêcher le fonctionnement du tout).

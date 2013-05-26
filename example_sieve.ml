@@ -24,6 +24,7 @@ module Example (K : KPN.S) = struct
       
 end
 
-module E = Example(Kahn.Pipe)
+(* module E = Example(Kahn.Pipe) *)
+module E = Example(Kahn.Socket)
 
 let () = E.K.run E.main

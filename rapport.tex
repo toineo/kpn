@@ -37,6 +37,12 @@ atteint nos objectifs même si, le temps permettant, nous aurions aimé
 avoir d'autres implémentations, faisant par exemple de la répartition
 de charge.
 
+Sur nos tests, les implémentations séquentielles se révèle la plus rapide,
+sans doute parce qu'elle évite les coûts de synchronisation et de
+communication, surtout que le \og vrai \fg parallélisme des processus lourds
+est inutile, même sur une machine multicoeur, dans un exemple tel que
+le crible où les données traversent le réseau de Kahn en série.
+
 Remarquons que l'interface proposée permet d'écrire des programmes plus
 généraux que ceux rentrant dans le cadre des réseaux de Kahn, et que
 nos implémentations permettent généralement à ces programmes de
@@ -121,6 +127,49 @@ le type d'opération à effectuer et l'éventuelle valeur. Dans le cas
 d'une lecture, le serveur renvoie la première valeur disponible, dès
 qu'il y en a une (le client reste bloqué pendant ce temps).
 
-Détaillons le fonctionnement des canaux. Côté client, ...
+Détaillons le fonctionnement des canaux. Côté client, chaque canal la
+donnée d'un ID de canal et de in/out\_channel OCaml correspondant à un
+socket pour communiquer avec le serveur. Ce dernier, de son côté,
+maintient pour chaque canal une liste de soumissions en attente d'être
+lues (put) ou de requêtes en cas d'absence de données (get), au moyen
+d'une table de hachage contenant des files
+(cf. \texttt{Socket/RequestObjectQueue.ml}). Les données sont
+sérialisées sous formes de chaînes grâce au module Marshal et aux
+fonctions d'échappement (note: \texttt{Scanf.unescaped} n'existe que
+dans OCaml $\geq$ 4.00 !).
+
+Le serveur utilise un thread par connexion (de client), et une requête
+se charge, lorsque le serveur peut y répondre, de réveiller le thread
+concerné (à l'aide d'une astuce avec des mutex) ; celui-ci pourra
+alors répondre à son client (qui lui a fait une demande de lecture).
+
+L'utilisation correcte des sockets constitue une bonne partie de la
+difficulté ; en effet il y a des détails techniques et un petite
+erreur peut empêcher le fonctionnement du tout.
+
+Un module \texttt{Simple.ml} est fourni (et c'est vers celui-ci que
+pointe \texttt{Kahn.Socket}) qui lance un client et un serveur sur
+différents threads dans un même processus, communiquant sur
+localhost. Ceci permet d'implémenter les fonctions de l'interface, et
+de faire en sorte que les exemples fonctionnent sans modification de
+code. Cependant, il est bien possible de faire tourner séparément
+client et serveur, même sur différentes machines connectées par un
+réseau (cf. l'exemple dans le dossier \texttt{Telegraph/}).
+
+Reste quelques points de frustration. Le premier est les coûts des
+communications forcées à passer par le serveur. Un modèle décentralisé
+où une file de communication est une connection directe entre 2
+clients (ce qui serait moins général mais suffirait à programmer des
+réseaux de Kahn) serait plus efficace.
+
+Le deuxième problème, et le plus gros, est que la fonction
+\texttt{doco} est implémentée simplement comme une création de threads
+dans le même client. On aurait apprécié de pouvoir lancer un client
+sur chaque machine de l'ENS, et que la reconfiguration dynamique du
+réseau distribue les nouveaux processus sur les machines inactives,
+pour faire un calcul de grande ampleur ! Ici, faute de temps, ce n'est
+pas le cas : s'il est possible de faire tourner différents processus
+sur différentes machines, il faut le faire manuellement\ldots 
+
 
 \end{document}

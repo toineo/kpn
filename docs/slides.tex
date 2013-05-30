@@ -1,0 +1,74 @@
+\documentclass[xetex]{beamer}
+
+% Don't use this with XeTeX !
+% \usepackage[utf8]{inputenc}
+% \usepackage[T1]{fontenc}
+
+\usepackage[frenchb]{babel}
+\usepackage{lmodern}
+% \usepackage{listings}
+
+% Taken from old beamer presentation
+% Some might be useless
+% \usepackage{graphicx}
+% \usepackage{enumerate}
+% \usepackage{stmaryrd}
+% \usepackage{wrapfig}
+% \usepackage{amsmath}
+% \usepackage{amsfonts}
+% \usepackage{amssymb}
+
+
+\title{Projet Réseaux de Kahn}
+\author[Nguyen, Voizard]{Nguyen Le Thanh Dung \and Antoine Voizard}
+\institute[ENS]{\'Ecole Normale Supérieure}
+
+\usetheme{CambridgeUS}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% \begin{frame}{Plan}
+%   \tableofcontents
+% \end{frame}
+
+\section{Généralités}
+
+\begin{frame}{Généralités}
+  \begin{itemize}
+  \item 4 implémentations distinctes :
+    \begin{itemize}
+    \item une avec des processus lourds / tubes
+    \item 2 séquentielles
+    \item une avec des sockets
+    \end{itemize}
+  \item Parfois inutilement compliquées
+  \end{itemize}
+\end{frame}
+
+\section{Forks/pipes}
+
+\begin{frame}{Forks et pipes}
+  \begin{itemize}
+  \item Pour coder cette version, c'est simple :
+  \item Prendre l'implémentation modèle avec les threads, puis remplacer
+    \begin{itemize}
+    \item \texttt{Thread.create} par des forks
+    \item \texttt{Thread.join} par \texttt{Unix.waitpid}
+    \item les files + mutex par des tubes
+    \end{itemize}
+  \item Tout marche ``tout seul''
+  \end{itemize}
+\end{frame}
+
+\section{Implémentations séquentielles}
+
+\begin{frame}{Séquentiel : vue d'ensemble}
+  
+\end{frame}
+
+\end{document}
+

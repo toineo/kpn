@@ -46,10 +46,23 @@
     \item une avec des sockets
     \end{itemize}
   \item Parfois inutilement compliquées
+  \item Interface monadique $\Rightarrow$ on ne pouvait pas s'empêcher
+    de s'inspirer un peu de Haskell !
+    \begin{itemize}
+    \item \texttt{let (\$) f x = f x}
+    \item \ldots
+    \end{itemize}
+  \item L'implémentation séquentielle est la plus performante
   \end{itemize}
 \end{frame}
 
 \section{Forks/pipes}
+
+\begin{frame}[c]
+  \begin{center}
+    \Huge \insertsection
+  \end{center}
+\end{frame}
 
 \begin{frame}{Forks et pipes}
   \begin{itemize}
@@ -61,13 +74,192 @@
     \item les files + mutex par des tubes
     \end{itemize}
   \item Tout marche ``tout seul''
+    \begin{itemize}
+    \item \texttt{Marshal} facilite la vie !
+    \end{itemize}
   \end{itemize}
 \end{frame}
 
-\section{Implémentations séquentielles}
 
+
+\section{En séquentiel}
+
+\begin{frame}[c]
+  \begin{center}
+    \Huge \insertsection
+  \end{center}
+\end{frame}
 \begin{frame}{Séquentiel : vue d'ensemble}
-  
+  \begin{itemize}
+  \item Utilisation du \emph{multitâche coopératif} pour simuler
+    le parallélisme
+  \item Faire en sorte que \texttt{bind}/\texttt{put}/\texttt{get}
+    passent la main aux autres ``processus''
+  \item Nécessite d'avoir du code qui coopère bien
+  \item Un processus doit pouvoir capturer \emph{la suite de son exécution}
+    pour la remettre à plus tard
+    \begin{itemize}
+    \item avec les continuations délimitées
+    \end{itemize}
+  \item 2 variantes de ces idées
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Continuations}
+  \begin{itemize}
+  \item Une étape de calcul est une fonction qui reçoit en argument
+    la suite
+    \begin{itemize}
+    \item \texttt{type ('a,'b) t = Cont of (('a -> 'b) -> 'b)}
+    \item type des calculs capables d'accéder à leur continuation
+    \end{itemize}
+  \item fonctions monadiques \texttt{return} et \texttt{bind} pour
+    séquencer des étapes en CPS
+  \item pour exécuter le calcul : lui passer une continuation finale
+  \item exemple : \texttt{Cont (fun k -> k)} interrompt tout et renvoie
+    la suite du calcul
+    \begin{itemize}
+    \item c'est le mécanisme à la base de tout !
+    \end{itemize}
+  \item cf. \texttt{Control.Monad.Cont} en Haskell
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Première variante}
+  \begin{itemize}
+  \item Adaptée de l'article \emph{A poor man's concurrency monad}
+  \item Idée : processus = calcul dans une monade de continuation
+    avec un type de retour particulier
+  \item Le calcul fait une étape puis renvoie
+    \begin{itemize}
+    \item soit la suite du calcul
+    \item soit ``stop''
+    \item soit ``je veux lancer cette liste de processus en parallèle
+      et les attendre''
+      \begin{itemize}
+      \item implémente \texttt{doco}
+      \item différence avec l'article
+      \end{itemize}
+    \end{itemize}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Première variante (suite)}
+  \begin{itemize}
+  \item Une boucle se charge d'ordonnancer tous les processus
+  \item (round-robin avec une file de processus en attente)
+  \item Hack avec des ID de processus pour attendre que tous les processus
+    lancés par un \texttt{doco} terminent
+  \item Implémenté différemment que dans l'article
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Deuxième variante : avec des coroutines}
+  \begin{itemize}
+  \item Résolution du problème en 2 étapes
+    \begin{itemize}
+    \item Coder une implémentation générale des coroutines à partir
+      des continuations
+    \item Les utiliser pour mettre en place le parallélisme
+    \end{itemize}
+  \item Implémentation de l'opérateur \texttt{yield} :
+    \begin{itemize}
+    \item \texttt{let yield x = Cont (fun k -> Yield (x,k))}
+    \end{itemize}
+  \item Réimplémenter \texttt{bind} pour séquencer 2 calculs
+    en insérant un \texttt{yield ()} au milieu
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Avec des coroutines (suite et fin)}
+  \begin{itemize}
+  \item Implémentation de \texttt{doco} = simple round-robin
+  \item Chaque processus s'occupe d'ordonnancer ses fils
+  \item Dans la 1ère variante il y avait 1 ordonnanceur global
+  \item Dans tous les cas, les channels sont triviaux
+  \end{itemize}
+\end{frame}
+
+
+\section{Réseau/sockets}
+
+\begin{frame}[c]
+  \begin{center}
+    \Huge \insertsection
+  \end{center}
+\end{frame}
+
+\begin{frame}{Architecture globale de l'implémentation réseau}
+  \begin{itemize}
+  \item Client/serveur
+  \item Toutes les communications des clients passent par les serveurs
+  \item Canaux identifiés par des numéros
+    \begin{itemize}
+    \item Une table de hachage côté serveur contient l'information des
+      canaux en cours d'utilisation
+    \end{itemize}
+  \item Mini-protocole de communication :
+    \begin{itemize}
+    \item Requête = \texttt{(get|put)} + ID de canal + donnée sérialisée
+    \end{itemize}
+  \item Code fonctorisé, utilise des modules pour passer des paramètres de
+    configuration
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Côté client}
+  \begin{itemize}
+  \item Type des canaux : id + \texttt{(in|out)\_channel} Caml correspondant
+    à un socket connecté au serveur
+  \item \texttt{get} et \texttt{put} implémentés comme on pense
+  \item \texttt{return} et \texttt{bind} implémentés comme avec les threads
+  \item \texttt{doco} purement local ! (on y reviendra)
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Côté serveur}
+  \begin{itemize}
+  \item Boucle pour accepter des clients
+  \item 1 worker thread créé pour chaque connexion, traite les requêtes
+    get/put qu'il reçoit
+  \item Pour chaque canal, on a une FIFO contenant
+    \begin{itemize}
+    \item soit des données (excès de put)
+    \item soit des demandes (excès de get), avec un callback\ldots
+    \end{itemize}
+  \item réception d'un put : appel callback ou ajout dans la queue
+  \item réception d'un get : peut être bloquant pour le worker en question
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Gros défaut}
+  \begin{itemize}
+  \item \texttt{doco} ne fait que créer de nouveaux threads sur le même client !
+  \item on a l'infrastructure pour faire communiquer des clients
+    sur différentes machines entre eux\ldots
+  \item mais pas pour distribuer des tâches automatiquement
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Ce que ça donne concrètement}
+  \begin{itemize}
+  \item On a un module qui implémente l'interface requise par le projet
+    \begin{itemize}
+    \item Il lance client et serveur sur la même machine
+    \item Ils communiquent sur localhost
+    \end{itemize}
+  \item Pour avoir une application ``sur le réseau'', manipuler
+    les fonctions spécifiques du module Socket
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{Contraste}
+  \begin{itemize}
+  \item Séquentiel : beaucoup d'efforts pour l'exécution
+    concurrente, communication triviale
+  \item Réseau : toute une infrastructure pour permettre la communication,
+    recours à la ``solution de facilité'' pour la concurrence
+  \end{itemize}
 \end{frame}
 
 \end{document}

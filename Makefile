@@ -11,6 +11,9 @@ example:
 example_sieve:
 	$(OCAMLBUILD) example_sieve.$(TARGET)
 
+telegraph:
+	$(OCAMLBUILD) Telegraph/server.$(TARGET) Telegraph/receiver.$(TARGET) Telegraph/sender.$(TARGET)
+
 clean:
 	$(OCAMLBUILD) -clean
 

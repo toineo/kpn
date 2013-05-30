@@ -17,6 +17,9 @@ telegraph:
 netwatch:
 	$(OCAMLBUILD) NetWatch/server.$(TARGET) NetWatch/receiver.$(TARGET) NetWatch/sender.$(TARGET)
 
+pi:
+	$(OCAMLBUILD) pi/server.$(TARGET) pi/display.$(TARGET) #pi/sender.$(TARGET)
+
 clean:
 	$(OCAMLBUILD) -clean
 

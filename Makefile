@@ -14,6 +14,9 @@ example_sieve:
 telegraph:
 	$(OCAMLBUILD) Telegraph/server.$(TARGET) Telegraph/receiver.$(TARGET) Telegraph/sender.$(TARGET)
 
+netwatch:
+	$(OCAMLBUILD) NetWatch/server.$(TARGET) NetWatch/receiver.$(TARGET) NetWatch/sender.$(TARGET)
+
 clean:
 	$(OCAMLBUILD) -clean
 
